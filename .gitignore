@@ -1,3 +1,7 @@
-#vs调式
+#vs2022 调试
 out
 .vs
+
+# QtCreator 调试
+build
+CMakeLists.txt.user*
