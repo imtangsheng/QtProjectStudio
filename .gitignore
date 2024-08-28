@@ -5,3 +5,6 @@ out
 # QtCreator 调试
 build
 CMakeLists.txt.user*
+
+
+# VSCode 调试 需要清理vs2022的配置，否则会使用vs2022的设置
