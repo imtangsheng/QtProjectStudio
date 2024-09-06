@@ -1,4 +1,4 @@
-#vs2022 调试
+# vs2022 调试
 out
 .vs
 
@@ -8,3 +8,7 @@ CMakeLists.txt.user*
 
 
 # VSCode 调试 需要清理vs2022的配置，否则会使用vs2022的设置
+
+# 调用的第三方库
+## 日志库
+/include/spdlog
