@@ -2,6 +2,10 @@
 #define SERIALPORT_H
 
 #include "common.h"
+#include <QSerialPort>
+#include <QSerialPortInfo>
+#include <QReadWriteLock>
+#include <QTimer>
 
 /**
  * 多面阵-车载 通讯手册 1.2  电子组 2022-04-18
@@ -75,28 +79,157 @@ inline unsigned int CRC16_2(unsigned char *buf, int len)
     return crc;
 }
 
-
-class API_EXPORT DeviceBase;
-
-
-
-class API_EXPORT SerialPort
+class SerialPortTemplate : public QObject
 {
+    Q_OBJECT
+    // 定义属性
+    Q_PROPERTY(bool isOpen READ isOpen NOTIFY isOpenChanged)
+
 public:
-    SerialPort()  = default;
-    ~SerialPort() = default;
+    explicit SerialPortTemplate(SerialPortTemplate* parent = nullptr,QString portName = NULL)
+        : QObject(parent),m_serialPort(new QSerialPort(this))    {
+        //open serial port
+        if(!portName.isEmpty()){
+            if(availablePorts().contains(portName)){
+                m_serialPort->setPortName(portName);
+                open();
+            }else{
+                qWarning()<<tr("找不到名称为%1的串口号!").arg(portName);
+            }
+        }
+        connect(m_serialPort,&QSerialPort::readyRead,this,&SerialPortTemplate::handleReadyRead);
+        connect(m_serialPort,&QSerialPort::errorOccurred,this,&SerialPortTemplate::handleError);
 
-    // 禁用拷贝操作
-    SerialPort(const SerialPort&) = delete;
-    SerialPort& operator=(const SerialPort&) = delete;
+        // connect(&parseThread_, &QThread::started, this, &SerialPortTemplate::processBuffer);
+        connect(&timer_, &QTimer::timeout, this, &SerialPortTemplate::fixedUpdate);
+    }
 
-    // 启用移动操作
-    SerialPort(SerialPort&&) = default;
-    SerialPort& operator=(SerialPort&&) = default;
+    virtual ~SerialPortTemplate(){
+        close();
+    };
 
+    // 添加一个方法来获取父 SerialPortTemplate
+    SerialPortTemplate* getParent() const {
+        return qobject_cast<SerialPortTemplate*>(parent());
+    };
 
-private:
+    // 串口是否打开
+    bool isOpen() const { return m_serialPort->isOpen(); }
+    // 最后一次错误
+    QString lastError() const {return m_lastError; }
+    void setLastError(const QString error) { m_lastError = error; }
+
+    // 打开串口
+    Q_INVOKABLE bool open()
+    {
+        if (m_serialPort->open(QIODevice::ReadWrite)) {
+
+            sendData("1234");
+            emit isOpenChanged();
+            return true;
+        }
+        qWarning()<<tr("打开串口%1失败!").arg(portName);
+        return false;
+    }
+
+    // 关闭串口
+    Q_INVOKABLE void close()
+    {
+        if (m_serialPort->isOpen()) {
+            m_serialPort->close();
+            emit isOpenChanged();
+        }
+    }
+
+    // 发送数据
+    Q_INVOKABLE bool sendData(const QByteArray &data)
+    {
+        if (m_serialPort->isOpen()) {
+            return m_serialPort->write(data) == data.size();
+        }
+        return false;
+    }
     
+    Q_INVOKABLE QByteArray getData(){
+        return m_serialPort->readAll();
+    }
+
+    // 获取可用串口列表
+    Q_INVOKABLE QStringList availablePorts()
+    {
+        QStringList ports;
+        for (const QSerialPortInfo &info : QSerialPortInfo::availablePorts()) {
+            ports << info.portName();
+        }
+        return ports;
+    }
+
+signals:
+    void isOpenChanged();
+
+protected slots:
+    // 解析线程
+    virtual void processBuffer(){
+        QByteArray bufferCopy;
+        {
+            QWriteLocker locker(&bufferLock_);
+            bufferCopy = buffer_;
+            //qDebug()<<"processBuffer sendData:"<<buffer_.toHex().toUpper();
+            buffer_.clear();
+        }
+        sendData(bufferCopy);
+    };
+    // 定时更新处理
+    virtual void fixedUpdate() {
+        qDebug()<<"fixedUpdate";
+    }
+
+protected:
+    QString portName;
+    QSerialPort *m_serialPort;
+    QString m_lastError;
+
+    QByteArray buffer_;
+    mutable QReadWriteLock bufferLock_;
+
+    QTimer timer_;
+    virtual void handleReadyRead(){
+        // 串口调试工具最快200ms一次发送数据
+        // parseByte took 44500 ns (0.044500 ms)
+        // handleReadyRead took 277800 ns (0.277800 ms)
+        // parseByte took 48400 ns (0.048400 ms)
+        // handleReadyRead took 790500 ns (0.790500 ms)
+        // parseByte took 46700 ns (0.046700 ms)
+        // handleReadyRead took 787300 ns (0.787300 ms)
+        // parseByte took 46300 ns (0.046300 ms)
+        // handleReadyRead took 784100 ns (0.784100 ms)
+        // auto start = std::chrono::high_resolution_clock::now();
+
+        QByteArray data = getData();
+        {
+            QWriteLocker locker(&bufferLock_);
+            buffer_.append(data);
+            //qDebug()<<"SerialPortTemplate handleReadyRead:"<<buffer_.toHex().toUpper();
+        }
+        processBuffer();
+        // auto end = std::chrono::high_resolution_clock::now();
+        // auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        // double milliseconds = duration.count() / 1e6; // 转换为毫秒
+        // qDebug().noquote() << QString("%1 took %2 ns (%3 ms)")
+        //                       .arg("handleReadyRead")
+        //                       .arg(duration.count())
+        //                       .arg(milliseconds, 0, 'f', 6);
+        
+    };
+    virtual void handleError(QSerialPort::SerialPortError error){
+        qWarning() << "Serial port error:" << error;
+        if (error == QSerialPort::NoError) {
+            return;
+        }
+        m_lastError = m_serialPort->errorString();
+    };
+private:
+
 };
 
 #endif // SERIALPORT_H

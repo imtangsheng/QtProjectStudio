@@ -12,7 +12,8 @@ else()
     set(PROJECT_PATH ${PROJECT_SOURCE_DIR})
 endif()
 
-set(CMAKE_AUTOMOC ON)
+# 自动为包含 Q_OBJECT 宏的头文件运行 moc, CMake根据包含的头文件,自动生成相应的 moc 文件
+set(CMAKE_AUTOMOC ON) 
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
@@ -32,9 +33,13 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core SerialPort)
 get_filename_component(PARENT_DIR ${PROJECT_SOURCE_DIR} DIRECTORY)
 include_directories(${PROJECT_PATH}/include)
 # 定义库目标
+set(HEADERS
+    ${PROJECT_PATH}/include/serialport/IMU/device_imu.h
+    ${PROJECT_PATH}/include/serialport/device.h ${PROJECT_PATH}/include/serialport/serialport.h
+)
 add_library(SerialIMU SHARED
     src/device_imu.cpp
-    ${PROJECT_PATH}/include/serialport/IMU/device_imu.h
+    ${HEADERS}
 )
 # 定义预处理宏
 target_compile_definitions(SerialIMU PRIVATE API_LIBRARY)

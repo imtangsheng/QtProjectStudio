@@ -9,12 +9,22 @@
  * Version: 0.0.1
 */
 
+#include <QtCore/qglobal.h>
+
 #ifdef API_LIBRARY
-#define API_EXPORT __declspec(dllexport)
+#define API_EXPORT Q_DECL_EXPORT
 #else
-#define API_EXPORT __declspec(dllimport)
+#define API_EXPORT Q_DECL_IMPORT
 #endif
 
+#define VER_MAJOR 0
+#define VER_MINOR 0
+#define VER_PATCH 1
+
+#define VER_TO_VERSION(major, minor, patch) (major * 10000 + minor * 100 + patch)
+#define VER_VERSION VER_TO_VERSION(VER_MAJOR, VER_MINOR, VER_PATCH)
+
+#include <QObject>
 #include <QDebug>
 #include <QString>
 using String = QString;
@@ -35,7 +45,7 @@ struct Result
     bool success;
     String message;
 
-    Result(bool s = false, const String& msg =""):success(s),message(msg) {}
+    Result(bool s = true, const String& msg =""):success(s),message(msg) {}
     operator bool() const {return success;}//重载了 bool 操作符，使其可以像之前的 bool 返回值一样使用例如：if (result)
 };
 
@@ -48,8 +58,8 @@ struct State
     QAtomicInteger<T> state;
     String message;
 
-    T getState() const { return state.load(); }
-    void setState(T s) { state.store(s); }
+    T getState() const { return state.loadAcquire(); }
+    void setState(T s) { state.storeRelease(s); }
     //在构造函数中，可以直接用 T 类型的值初始化它
     State(T s = T(),const QString& msg = QString()) : state(s), message(msg) {}
 
@@ -62,9 +72,13 @@ struct State
     // 重载类型转换运算符，允许隐式转换为 T 类型
     operator T() const { return getState(); }
 
-    operator bool() const {return state.load();}
+    // operator bool() const {return state.load();}
 };
 
-State<int> AppStatus(10, "Initial state");
+extern State<int> AppStatus;
+
+/*ini文件读取配置，Qt自带系统方法，指定存储在本地或者系统注册表等地方*/
+#include <QSettings>
+extern QSettings g_appSettings;
 
 #endif // COMMON_H

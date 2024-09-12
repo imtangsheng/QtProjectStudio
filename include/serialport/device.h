@@ -3,12 +3,12 @@
 
 #include "serialport/serialport.h"
 
-#include <QScopedPointer>
-
 using StateType = int; //int 类型的默认值是 0。
 
-class DeviceBase{
+class DeviceBase
+{
 public:
+    DeviceBase() = default;
     virtual ~DeviceBase() = default;
     virtual Result init() = 0; //初始化
     virtual Result start() = 0; //启动
@@ -31,20 +31,19 @@ protected:
 class Command 
 {
 public:
-    //explicit Command(const DeviceBase& dev) : dev(const_cast<DeviceBase*>(&dev)) {}
+    explicit Command(DeviceBase* dev = nullptr) : dev(dev) {}
     virtual ~Command() = default;
-    // virtual Result getCmd();
+    virtual Result parseByte(QByteArray packet) = 0;
 
 protected:
-    //QScopedPointer<DeviceBase> dev; // 设备
+    DeviceBase *dev; // 设备
     mutable DataCode code = 0x00;
 };
 
-class SerialDevice : public DeviceBase
+class SerialDevice : public SerialPortTemplate,DeviceBase
 {
 public:
-
+    SerialDevice(SerialPortTemplate* parent = nullptr,QString portName = NULL) : SerialPortTemplate(parent,portName){}
 protected:
-    QMap<DataCode, Command> cmd;
 };
 #endif // DEVICE_H
